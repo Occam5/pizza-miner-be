@@ -1,8 +1,10 @@
 package model
 
-//执行数据迁移
-
-func migration() {
+// Migration 执行数据迁移
+func Migration() {
 	// 自动迁移模式
-	_ = DB.AutoMigrate(&User{})
+	DB.AutoMigrate(&User{})
+	DB.AutoMigrate(&Frog{})
+	DB.AutoMigrate(&PrizePool{})
+	DB.AutoMigrate(&PoolParticipant{})
 }

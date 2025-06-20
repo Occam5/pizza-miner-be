@@ -30,6 +30,17 @@ func NewRouter() *gin.Engine {
 			// User Routing
 			auth.GET("users/me", api.UserMe)
 			auth.POST("users/claim-rewards", api.ClaimRewards)
+
+			// Game Routing
+			auth.POST("game/activate", api.GameActivate)
+			auth.PUT("game/hunger", api.UpdateHunger)
+			auth.POST("game/catch-big-prize", api.CatchBigPrize)
+
+			// Pool Routing
+			auth.GET("pools/current", api.GetCurrentPool)
+
+			// WebSocket连接
+			auth.GET("game/ws", api.WebSocketHandler)
 		}
 	}
 	return r

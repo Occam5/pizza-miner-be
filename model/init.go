@@ -48,5 +48,5 @@ func Database(connString string) {
 	sqlDB.SetMaxOpenConns(20)
 	DB = db
 
-	migration()
+	Migration()
 }
