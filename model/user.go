@@ -1,30 +1,16 @@
 package model
 
 import (
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
 // User 用户模型
 type User struct {
 	gorm.Model
-	UserName       string
-	PasswordDigest string
-	Nickname       string
-	Status         string
-	Avatar         string `gorm:"size:1000"`
+	WalletAddress    string  `gorm:"uniqueIndex;size:44"` // Solana wallet address
+	UnclaimedRewards float64 `gorm:"default:0"`           // 未领取的奖励(SOL)
+	HistoryRewards   float64 `gorm:"default:0"`           // 历史总收益(SOL)
 }
-
-const (
-	// PassWordCost 密码加密难度
-	PassWordCost = 12
-	// Active 激活用户
-	Active string = "active"
-	// Inactive 未激活用户
-	Inactive string = "inactive"
-	// Suspend 被封禁用户
-	Suspend string = "suspend"
-)
 
 // GetUser 用ID获取用户
 func GetUser(ID interface{}) (User, error) {
@@ -33,18 +19,27 @@ func GetUser(ID interface{}) (User, error) {
 	return user, result.Error
 }
 
-// SetPassword 设置密码
-func (user *User) SetPassword(password string) error {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), PassWordCost)
-	if err != nil {
-		return err
-	}
-	user.PasswordDigest = string(bytes)
-	return nil
+// GetUserByWallet 通过钱包地址获取用户
+func GetUserByWallet(walletAddress string) (User, error) {
+	var user User
+	result := DB.Where("wallet_address = ?", walletAddress).First(&user)
+	return user, result.Error
 }
 
-// CheckPassword 校验密码
-func (user *User) CheckPassword(password string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(user.PasswordDigest), []byte(password))
-	return err == nil
+// CreateUser 创建用户
+func CreateUser(walletAddress string) (User, error) {
+	user := User{
+		WalletAddress:    walletAddress,
+		UnclaimedRewards: 0,
+		HistoryRewards:   0,
+	}
+	result := DB.Create(&user)
+	return user, result.Error
+}
+
+// UpdateRewards 更新用户奖励
+func (user *User) UpdateRewards(unclaimed float64, history float64) error {
+	user.UnclaimedRewards = unclaimed
+	user.HistoryRewards = history
+	return DB.Save(user).Error
 }

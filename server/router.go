@@ -1,7 +1,6 @@
 package server
 
 import (
-	"os"
 	"singo/api"
 	"singo/middleware"
 
@@ -12,8 +11,7 @@ import (
 func NewRouter() *gin.Engine {
 	r := gin.Default()
 
-	// 中间件, 顺序不能改
-	r.Use(middleware.Session(os.Getenv("SESSION_SECRET")))
+	// 中间件
 	r.Use(middleware.Cors())
 	r.Use(middleware.CurrentUser())
 
@@ -23,18 +21,15 @@ func NewRouter() *gin.Engine {
 		v1.POST("ping", api.Ping)
 
 		// 用户登录
-		v1.POST("user/register", api.UserRegister)
-
-		// 用户登录
-		v1.POST("user/login", api.UserLogin)
+		v1.POST("auth/login", api.UserLogin)
 
 		// 需要登录保护的
 		auth := v1.Group("")
 		auth.Use(middleware.AuthRequired())
 		{
 			// User Routing
-			auth.GET("user/me", api.UserMe)
-			auth.DELETE("user/logout", api.UserLogout)
+			auth.GET("users/me", api.UserMe)
+			auth.POST("users/claim-rewards", api.ClaimRewards)
 		}
 	}
 	return r
