@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"log"
 	"singo/model"
 	"singo/serializer"
 
@@ -92,12 +93,18 @@ func (service *GameHungerService) UpdateHunger(c *gin.Context, user *model.User)
 		return serializer.DBErr("Failed to get frog", err)
 	}
 
-	// 更新饥饿值
+	// 计算新的饥饿值
 	newHungerLevel := frog.HungerLevel + int(service.PizzaValue)
+	log.Printf("用户 %d 的青蛙当前饥饿值: %d, 增加值: %d, 计算后值: %d",
+		user.ID, frog.HungerLevel, int(service.PizzaValue), newHungerLevel)
+
+	// 更新饥饿值（会在 UpdateHungerLevel 中自动限制在 0-100 范围内）
 	err = frog.UpdateHungerLevel(newHungerLevel)
 	if err != nil {
 		return serializer.DBErr("Failed to update hunger level", err)
 	}
+
+	log.Printf("用户 %d 的青蛙饥饿值已更新为: %d", user.ID, frog.HungerLevel)
 
 	// 通过WebSocket广播更新
 	wsManager.BroadcastHungerUpdate(user.ID, frog.ID, frog.HungerLevel)

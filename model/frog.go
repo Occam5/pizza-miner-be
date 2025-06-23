@@ -8,6 +8,10 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	MaxHungerLevel = 100 // 最大饥饿值
+)
+
 // Frog 青蛙模型
 type Frog struct {
 	gorm.Model
@@ -47,6 +51,8 @@ func GetFrogByUserID(userID uint) (*Frog, error) {
 func (frog *Frog) UpdateHungerLevel(newLevel int) error {
 	if newLevel < 0 {
 		newLevel = 0
+	} else if newLevel > MaxHungerLevel {
+		newLevel = MaxHungerLevel
 	}
 
 	frog.HungerLevel = newLevel
