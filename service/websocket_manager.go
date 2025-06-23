@@ -28,18 +28,23 @@ func GetWebSocketManager() *WebSocketManager {
 
 // RegisterClient 注册新的WebSocket客户端并发送初始状态
 func (m *WebSocketManager) RegisterClient(userID uint, conn *websocket.Conn) error {
-	m.clientsMux.Lock()
-	defer m.clientsMux.Unlock()
+	// 先获取旧连接（如果存在）
+	m.clientsMux.RLock()
+	oldConn, exists := m.clients[userID]
+	m.clientsMux.RUnlock()
 
-	log.Printf("开始注册用户 %d 的WebSocket客户端", userID)
-
-	// 如果已存在旧连接，关闭它
-	if oldConn, exists := m.clients[userID]; exists {
+	// 如果存在旧连接，先关闭它
+	if exists {
 		log.Printf("用户 %d 存在旧连接，正在关闭", userID)
 		oldConn.Close()
+		// 等待一小段时间确保旧连接完全关闭
+		time.Sleep(100 * time.Millisecond)
 	}
 
+	// 注册新连接
+	m.clientsMux.Lock()
 	m.clients[userID] = conn
+	m.clientsMux.Unlock()
 	log.Printf("用户 %d 的WebSocket连接已保存", userID)
 
 	// 发送初始状态
@@ -188,48 +193,44 @@ func (m *WebSocketManager) UnregisterClient(userID uint) {
 	m.clientsMux.Lock()
 	defer m.clientsMux.Unlock()
 
-	log.Printf("开始注销用户 %d 的WebSocket客户端", userID)
 	if conn, exists := m.clients[userID]; exists {
-		conn.Close()
-		delete(m.clients, userID)
+		log.Printf("开始注销用户 %d 的WebSocket客户端", userID)
+		delete(m.clients, userID) // 先从map中删除，避免其他goroutine继续使用
+		conn.Close()              // 然后关闭连接
 		log.Printf("用户 %d 的WebSocket客户端已注销", userID)
-	} else {
-		log.Printf("用户 %d 的WebSocket客户端不存在", userID)
 	}
 }
 
 // BroadcastHungerUpdate 广播饥饿值更新
 func (m *WebSocketManager) BroadcastHungerUpdate(userID uint, frogID uint, newHungerLevel int) {
 	m.clientsMux.RLock()
-	defer m.clientsMux.RUnlock()
+	conn, exists := m.clients[userID]
+	m.clientsMux.RUnlock()
+
+	if !exists {
+		log.Printf("未找到用户 %d 的WebSocket连接", userID)
+		return
+	}
 
 	log.Printf("准备广播用户 %d 的饥饿值更新: frogID=%d, newHungerLevel=%d", userID, frogID, newHungerLevel)
 
-	if conn, exists := m.clients[userID]; exists {
-		log.Printf("找到用户 %d 的WebSocket连接，准备发送更新", userID)
+	// 设置写入超时
+	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 
-		// 设置写入超时
-		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	message := map[string]interface{}{
+		"type":           "hunger-update",
+		"frogId":         frogID,
+		"newHungerLevel": newHungerLevel,
+	}
 
-		message := map[string]interface{}{
-			"type":           "hunger-update",
-			"frogId":         frogID,
-			"newHungerLevel": newHungerLevel,
-		}
-
-		if err := conn.WriteJSON(message); err != nil {
-			log.Printf("发送用户 %d 的饥饿值更新失败: %v", userID, err)
-			// 如果是连接关闭错误，移除连接
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				m.clientsMux.RUnlock()
-				m.UnregisterClient(userID)
-				m.clientsMux.RLock()
-			}
-		} else {
-			log.Printf("成功发送用户 %d 的饥饿值更新", userID)
+	if err := conn.WriteJSON(message); err != nil {
+		log.Printf("发送用户 %d 的饥饿值更新失败: %v", userID, err)
+		// 如果是连接关闭错误，移除连接
+		if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+			m.UnregisterClient(userID)
 		}
 	} else {
-		log.Printf("未找到用户 %d 的WebSocket连接", userID)
+		log.Printf("成功发送用户 %d 的饥饿值更新", userID)
 	}
 }
 
