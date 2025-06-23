@@ -68,9 +68,6 @@ func (service *GameActivateService) Activate(c *gin.Context, user *model.User) s
 		return serializer.DBErr("Failed to get participant info", err)
 	}
 
-	// 启动饥饿值更新工作器（如果还没有启动）
-	GetWebSocketManager().StartHungerUpdateWorker()
-
 	return serializer.Response{
 		Code: 0,
 		Data: gin.H{

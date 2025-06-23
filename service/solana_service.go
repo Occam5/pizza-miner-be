@@ -7,13 +7,16 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 )
 
 const (
 	SolanaMainnetRPCEndpoint = "https://api.mainnet-beta.solana.com"
-	SolanaDevnetRPCEndpoint  = "https://api.devnet.solana.com"
+	SolanaDevnetRPCEndpoint  = "https://devnet.helius-rpc.com/?api-key=0422440e-2b28-48a5-8683-fb4de54ee525"
 	RequiredAmount           = 0.01       // 需要转账的SOL数量
 	LAMPORTS_PER_SOL         = 1000000000 // 1 SOL = 10^9 lamports
+	maxRetries               = 3          // 最大重试次数
+	initialRetryDelay        = 1 * time.Second
 )
 
 // 当前使用的网络
@@ -66,6 +69,34 @@ func GetSolanaRPCEndpoint() string {
 	return SolanaDevnetRPCEndpoint
 }
 
+// sendRPCRequest 发送RPC请求（带重试机制）
+func sendRPCRequest(requestBody []byte) (*http.Response, error) {
+	var lastErr error
+	retryDelay := initialRetryDelay
+
+	for i := 0; i < maxRetries; i++ {
+		if i > 0 {
+			log.Printf("第%d次重试RPC请求...", i+1)
+			time.Sleep(retryDelay)
+			retryDelay *= 2 // 指数退避
+		}
+
+		client := &http.Client{
+			Timeout: 10 * time.Second, // 设置超时时间
+		}
+
+		resp, err := client.Post(GetSolanaRPCEndpoint(), "application/json", bytes.NewBuffer(requestBody))
+		if err == nil {
+			return resp, nil
+		}
+
+		lastErr = err
+		log.Printf("RPC请求失败 (尝试 %d/%d): %v", i+1, maxRetries, err)
+	}
+
+	return nil, fmt.Errorf("after %d retries: %v", maxRetries, lastErr)
+}
+
 // VerifyTransaction 验证转账交易
 func VerifyTransaction(transactionHash string, expectedReceiverAddress string) (bool, error) {
 	log.Printf("开始验证交易，Hash: %s, 接收地址: %s, 网络: %s",
@@ -90,10 +121,10 @@ func VerifyTransaction(transactionHash string, expectedReceiverAddress string) (
 	requestJSON, _ := json.Marshal(requestBody)
 	log.Printf("发送RPC请求到 %s: %s", GetSolanaRPCEndpoint(), string(requestJSON))
 
-	// 发送请求
-	resp, err := http.Post(GetSolanaRPCEndpoint(), "application/json", bytes.NewBuffer(requestJSON))
+	// 发送请求（带重试）
+	resp, err := sendRPCRequest(requestJSON)
 	if err != nil {
-		log.Printf("RPC请求失败: %v", err)
+		log.Printf("RPC请求最终失败: %v", err)
 		return false, fmt.Errorf("failed to send RPC request: %v", err)
 	}
 	defer resp.Body.Close()

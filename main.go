@@ -1,11 +1,9 @@
 package main
 
 import (
-	"os"
 	"singo/conf"
 	"singo/server"
-
-	"github.com/gin-gonic/gin"
+	"singo/service"
 )
 
 func main() {
@@ -13,7 +11,11 @@ func main() {
 	conf.Init()
 
 	// 装载路由
-	gin.SetMode(os.Getenv("GIN_MODE"))
 	r := server.NewRouter()
+
+	// 启动饥饿值更新工作器
+	service.GetWebSocketManager().StartHungerUpdateWorker()
+
+	// 运行服务器
 	r.Run(":3001")
 }

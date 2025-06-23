@@ -1,6 +1,7 @@
 package api
 
 import (
+	"singo/model"
 	"singo/serializer"
 	"singo/service"
 
@@ -29,12 +30,25 @@ func UserMe(c *gin.Context) {
 		return
 	}
 
+	// 获取用户的青蛙状态
+	frog, err := model.GetFrogByUserID(user.ID)
+	if err != nil && !model.IsRecordNotFoundError(err) {
+		c.JSON(200, serializer.DBErr("Failed to get frog status", err))
+		return
+	}
+
+	// 判断是否有激活的青蛙
+	isActive := frog != nil && frog.IsActive
+
 	c.JSON(200, serializer.Response{
 		Code: 0,
 		Data: gin.H{
-			"walletAddress":    user.WalletAddress,
-			"unclaimedRewards": user.UnclaimedRewards,
-			"historyRewards":   user.HistoryRewards,
+			"user": gin.H{
+				"walletAddress":    user.WalletAddress,
+				"unclaimedRewards": user.UnclaimedRewards,
+				"historyRewards":   user.HistoryRewards,
+				"isActive":         isActive,
+			},
 		},
 	})
 }

@@ -106,6 +106,13 @@ func (service *UserLoginService) Login(c *gin.Context) serializer.Response {
 		}
 	}
 
+	// 获取用户的青蛙状态
+	frog, err := model.GetFrogByUserID(user.ID)
+	isActive := false
+	if err == nil || model.IsRecordNotFoundError(err) {
+		isActive = frog != nil && frog.IsActive
+	}
+
 	// 生成JWT token
 	token, err := generateToken(service.WalletAddress)
 	if err != nil {
@@ -121,6 +128,7 @@ func (service *UserLoginService) Login(c *gin.Context) serializer.Response {
 				"walletAddress":    user.WalletAddress,
 				"unclaimedRewards": user.UnclaimedRewards,
 				"historyRewards":   user.HistoryRewards,
+				"isActive":         isActive,
 			},
 		},
 		Msg: "Login successful",
