@@ -23,6 +23,11 @@ func Init() {
 	}
 
 	// 连接数据库
-	model.Database(os.Getenv("MYSQL_DSN"))
+	model.Database(DatabaseConfig())
 	cache.Redis()
+}
+
+// DatabaseConfig 获取数据库配置
+func DatabaseConfig() string {
+	return os.Getenv("MYSQL_DSN")
 }

@@ -2,6 +2,8 @@ package service
 
 import (
 	"log"
+	"math/rand"
+	"singo/event"
 	"singo/model"
 	"sync"
 	"time"
@@ -20,6 +22,16 @@ var (
 		clients: make(map[uint]*websocket.Conn),
 	}
 )
+
+func init() {
+	// 初始化随机数生成器
+	rand.Seed(time.Now().UnixNano())
+
+	// 订阅奖池激活事件
+	event.Subscribe(event.PoolBecameActive, func(e event.PoolEvent) {
+		GetPrizeUpdaterService().StartUpdater(e.PoolID)
+	})
+}
 
 // GetWebSocketManager 获取WebSocket管理器实例
 func GetWebSocketManager() *WebSocketManager {
@@ -329,6 +341,11 @@ func (m *WebSocketManager) updateAllFrogsHunger() {
 			if newHungerLevel == 0 {
 				frog.IsActive = false
 				log.Printf("青蛙 %d 因饥饿值降至0而停用", frog.ID)
+
+				// 检查并更新奖池状态
+				if err := m.checkAndUpdatePoolStatus(frog.ID); err != nil {
+					log.Printf("检查并更新奖池状态失败: %v", err)
+				}
 			}
 
 			if err := model.DB.Save(&frog).Error; err != nil {
@@ -339,4 +356,49 @@ func (m *WebSocketManager) updateAllFrogsHunger() {
 			m.BroadcastHungerUpdate(frog.UserID, frog.ID, frog.HungerLevel)
 		}
 	}
+}
+
+// checkAndUpdatePoolStatus 检查并更新奖池状态
+func (m *WebSocketManager) checkAndUpdatePoolStatus(frogID uint) error {
+	// 获取青蛙所在的奖池
+	var participant model.PoolParticipant
+	if err := model.DB.Where("frog_id = ?", frogID).First(&participant).Error; err != nil {
+		return err
+	}
+
+	// 获取奖池信息
+	var pool model.PrizePool
+	if err := model.DB.First(&pool, participant.PoolID).Error; err != nil {
+		return err
+	}
+
+	// 如果奖池已经完成，不需要进一步处理
+	if pool.Status == model.PoolStatusCompleted {
+		return nil
+	}
+
+	// 检查奖池中是否还有活跃的青蛙
+	var activeCount int64
+	if err := model.DB.Model(&model.Frog{}).
+		Joins("JOIN pool_participants ON pool_participants.frog_id = frogs.id").
+		Where("pool_participants.pool_id = ? AND frogs.is_active = ?", pool.ID, true).
+		Count(&activeCount).Error; err != nil {
+		return err
+	}
+
+	// 如果没有活跃的青蛙，将奖池标记为完成
+	if activeCount == 0 {
+		now := time.Now()
+		pool.Status = model.PoolStatusCompleted
+		pool.CompletedAt = &now
+		if err := model.DB.Save(&pool).Error; err != nil {
+			return err
+		}
+
+		// 广播游戏结束消息
+		m.BroadcastGameOver(pool.ID, "", 0) // 没有赢家，奖金为0
+		log.Printf("奖池 %d 因没有活跃青蛙而结束", pool.ID)
+	}
+
+	return nil
 }

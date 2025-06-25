@@ -1,6 +1,7 @@
 package model
 
 import (
+	"singo/event"
 	"time"
 
 	"gorm.io/gorm"
@@ -77,6 +78,11 @@ func (pool *PrizePool) AddParticipant(frogID uint, walletAddress string) error {
 			tx.Rollback()
 			return err
 		}
+		// 发布奖池激活事件
+		event.Publish(event.PoolEvent{
+			Type:   event.PoolBecameActive,
+			PoolID: pool.ID,
+		})
 	}
 
 	return tx.Commit().Error
