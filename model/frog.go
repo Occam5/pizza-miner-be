@@ -74,9 +74,18 @@ func IsRecordNotFoundError(err error) bool {
 
 // GetCurrentActivePool 获取用户当前活跃的奖池
 func GetCurrentActivePool(userID uint) (*PrizePool, error) {
+	// 先获取用户的青蛙
+	frog, err := GetFrogByUserID(userID)
+	if err != nil {
+		return nil, err
+	}
+	if frog == nil {
+		return nil, nil
+	}
+
 	var pool PrizePool
 	result := DB.Joins("JOIN pool_participants ON pool_participants.pool_id = prize_pools.id").
-		Where("pool_participants.user_id = ? AND prize_pools.status != ?", userID, PoolStatusCompleted).
+		Where("pool_participants.frog_id = ? AND prize_pools.status != ?", frog.ID, PoolStatusCompleted).
 		Order("prize_pools.created_at DESC").
 		First(&pool)
 

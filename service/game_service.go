@@ -57,14 +57,14 @@ func (service *GameActivateService) Activate(c *gin.Context, user *model.User) s
 		}
 	}
 
-	// 将用户添加到奖池
-	err = pool.AddParticipant(user.ID, user.WalletAddress)
+	// 将青蛙添加到奖池
+	err = pool.AddParticipant(frog.ID, user.WalletAddress)
 	if err != nil {
 		return serializer.DBErr("Failed to add participant", err)
 	}
 
-	// 获取用户在奖池中的序号
-	participant, err := model.GetParticipantByUserAndPool(user.ID, pool.ID)
+	// 获取青蛙在奖池中的序号
+	participant, err := model.GetParticipantByFrogAndPool(frog.ID, pool.ID)
 	if err != nil {
 		return serializer.DBErr("Failed to get participant info", err)
 	}
@@ -119,6 +119,15 @@ func (service *GameHungerService) UpdateHunger(c *gin.Context, user *model.User)
 
 // CatchBigPrize 抓取大奖
 func (service *GameCatchPrizeService) CatchBigPrize(c *gin.Context, user *model.User) serializer.Response {
+	// 获取用户的青蛙
+	frog, err := model.GetFrogByUserID(user.ID)
+	if err != nil {
+		return serializer.DBErr("Failed to get frog", err)
+	}
+	if frog == nil {
+		return serializer.ParamErr("User has no active frog", nil)
+	}
+
 	// 获取奖池
 	var pool model.PrizePool
 	result := model.DB.First(&pool, service.PoolID)
@@ -131,10 +140,10 @@ func (service *GameCatchPrizeService) CatchBigPrize(c *gin.Context, user *model.
 		return serializer.ParamErr("Pool is not active", nil)
 	}
 
-	// 检查用户是否是参与者
-	_, err := model.GetParticipantByUserAndPool(user.ID, pool.ID)
+	// 检查青蛙是否是参与者
+	_, err = model.GetParticipantByFrogAndPool(frog.ID, pool.ID)
 	if err != nil {
-		return serializer.ParamErr("User is not in this pool", nil)
+		return serializer.ParamErr("Frog is not in this pool", nil)
 	}
 
 	// 完成奖池并发放奖励

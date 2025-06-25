@@ -46,14 +46,14 @@ func GetAvailablePool() (PrizePool, error) {
 }
 
 // AddParticipant 添加参与者
-func (pool *PrizePool) AddParticipant(userID uint, walletAddress string) error {
+func (pool *PrizePool) AddParticipant(frogID uint, walletAddress string) error {
 	if pool.CurrentPlayers >= 10 {
 		return nil
 	}
 
 	participant := PoolParticipant{
 		PoolID:        pool.ID,
-		UserID:        userID,
+		FrogID:        frogID,
 		WalletAddress: walletAddress,
 		SerialNumber:  pool.CurrentPlayers + 1,
 		JoinedAt:      time.Now(),

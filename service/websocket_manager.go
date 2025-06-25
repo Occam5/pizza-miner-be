@@ -136,10 +136,18 @@ func (m *WebSocketManager) sendPoolInfo(userID uint, conn *websocket.Conn) error
 
 		var participantsData []map[string]interface{}
 		for _, p := range participants {
+			// 获取青蛙的状态
+			var frog model.Frog
+			if err := model.DB.First(&frog, p.FrogID).Error; err != nil {
+				log.Printf("获取青蛙 %d 状态失败: %v", p.FrogID, err)
+				continue
+			}
+
 			participantsData = append(participantsData, map[string]interface{}{
 				"walletAddress":  p.WalletAddress,
 				"serialNumber":   p.SerialNumber,
 				"canSeeBigPrize": p.WalletAddress == pool.CurrentBigPrizeHolder,
+				"isActive":       frog.IsActive,
 			})
 		}
 
