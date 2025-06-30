@@ -152,7 +152,35 @@ func (service *GameCatchPrizeService) CatchBigPrize(c *gin.Context, user *model.
 		return serializer.DBErr("Failed to complete pool", err)
 	}
 
-	// TODO: 实现奖励发放逻辑
+	// 更新获胜者的未领取奖励
+	user.UnclaimedRewards += pool.PrizeAmount
+	if err := model.DB.Save(user).Error; err != nil {
+		return serializer.DBErr("Failed to update user rewards", err)
+	}
+
+	// 获取该奖池中的所有参与者
+	participants, err := model.GetParticipantsByPoolID(pool.ID)
+	if err != nil {
+		return serializer.DBErr("Failed to get pool participants", err)
+	}
+
+	// 将所有参与者的青蛙饥饿值设置为0并停用
+	for _, participant := range participants {
+		var participantFrog model.Frog
+		if err := model.DB.First(&participantFrog, participant.FrogID).Error; err != nil {
+			continue // 跳过错误，继续处理其他青蛙
+		}
+
+		participantFrog.HungerLevel = 0
+		participantFrog.IsActive = false
+
+		if err := model.DB.Save(&participantFrog).Error; err != nil {
+			continue // 跳过错误，继续处理其他青蛙
+		}
+
+		// 广播饥饿值更新
+		wsManager.BroadcastHungerUpdate(participantFrog.UserID, participantFrog.ID, 0)
+	}
 
 	// 广播游戏结束
 	wsManager.BroadcastGameOver(pool.ID, user.WalletAddress, pool.PrizeAmount)
