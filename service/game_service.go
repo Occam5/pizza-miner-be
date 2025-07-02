@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"singo/model"
 	"singo/serializer"
 
@@ -28,8 +29,13 @@ type GameCatchPrizeService struct {
 
 // Activate 激活青蛙
 func (service *GameActivateService) Activate(c *gin.Context, user *model.User) serializer.Response {
+	treasuryPublicKey := os.Getenv("TREASURY_PUBLIC_KEY")
+	if treasuryPublicKey == "" {
+		return serializer.ParamErr("Treasury public key not configured", nil)
+	}
+
 	// 验证转账交易
-	verified, err := VerifyTransaction(service.TransactionHash, "8bFainbiN7oKWUgat2iXqmcSJtcTs3yiUTtXs8CNW87e")
+	verified, err := VerifyTransaction(service.TransactionHash, treasuryPublicKey)
 	if err != nil {
 		return serializer.ParamErr(fmt.Sprintf("Failed to verify transaction: %v", err), err)
 	}

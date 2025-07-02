@@ -64,24 +64,34 @@ func ClaimRewards(c *gin.Context) {
 		return
 	}
 
-	// TODO: 实现与Solana链的交互，转账奖励给用户
-	amount := user.UnclaimedRewards
-
-	// 更新用户奖励数据
-	user.HistoryRewards += amount
-	user.UnclaimedRewards = 0
-	if err := user.UpdateRewards(0, user.HistoryRewards); err != nil {
-		c.JSON(200, serializer.DBErr("Failed to update rewards", err))
+	var service service.ClaimRewardsService
+	if err := c.ShouldBind(&service); err != nil {
+		c.JSON(200, ErrorResponse(err))
 		return
 	}
 
-	c.JSON(200, serializer.Response{
-		Code: 0,
-		Data: gin.H{
-			"amount": amount,
-			// TODO: 添加交易hash
-			"transactionHash": "",
-		},
-		Msg: "Rewards claimed successfully",
-	})
+	// 创建新的交易
+	res := service.CreateTransaction(user)
+	c.JSON(200, res)
+}
+
+// SubmitRewardTx 提交已签名的奖励交易
+func SubmitRewardTx(c *gin.Context) {
+	user := CurrentUser(c)
+	if user == nil {
+		c.JSON(200, serializer.Response{
+			Code: 40001,
+			Msg:  "User not found",
+		})
+		return
+	}
+
+	var service service.SubmitRewardTxService
+	if err := c.ShouldBind(&service); err != nil {
+		c.JSON(200, serializer.ParamErr("Invalid parameters", err))
+		return
+	}
+
+	res := service.Submit(user)
+	c.JSON(200, res)
 }

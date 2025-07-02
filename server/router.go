@@ -30,6 +30,7 @@ func NewRouter() *gin.Engine {
 			// User Routing
 			auth.GET("users/me", api.UserMe)
 			auth.POST("users/claim-rewards", api.ClaimRewards)
+			auth.POST("users/submit-reward-tx", api.SubmitRewardTx)
 
 			// Game Routing
 			auth.POST("game/activate", api.GameActivate)
