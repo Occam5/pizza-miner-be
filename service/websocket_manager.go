@@ -31,6 +31,11 @@ func init() {
 	event.Subscribe(event.PoolBecameActive, func(e event.PoolEvent) {
 		GetPrizeUpdaterService().StartUpdater(e.PoolID)
 	})
+
+	// 订阅奖池参与者变化事件
+	event.Subscribe(event.PoolParticipantsChanged, func(e event.PoolEvent) {
+		GetWebSocketManager().BroadcastPoolUpdate(e.PoolID, e.Participants)
+	})
 }
 
 // GetWebSocketManager 获取WebSocket管理器实例
@@ -338,6 +343,7 @@ func (m *WebSocketManager) updateAllFrogsHunger() {
 			frog.HungerLevel = newHungerLevel
 			frog.LastFeedTime = time.Now()
 
+			wasActive := frog.IsActive
 			if newHungerLevel == 0 {
 				frog.IsActive = false
 				log.Printf("青蛙 %d 因饥饿值降至0而停用", frog.ID)
@@ -354,6 +360,54 @@ func (m *WebSocketManager) updateAllFrogsHunger() {
 			}
 
 			m.BroadcastHungerUpdate(frog.UserID, frog.ID, frog.HungerLevel)
+
+			// 如果青蛙的激活状态发生变化，广播奖池更新
+			if wasActive != frog.IsActive {
+				// 获取青蛙所在的奖池
+				var participant model.PoolParticipant
+				if err := model.DB.Where("frog_id = ?", frog.ID).First(&participant).Error; err != nil {
+					log.Printf("获取青蛙 %d 的奖池参与信息失败: %v", frog.ID, err)
+					continue
+				}
+
+				// 获取奖池所有参与者信息
+				participants, err := model.GetParticipantsByPoolID(participant.PoolID)
+				if err != nil {
+					log.Printf("获取奖池 %d 参与者失败: %v", participant.PoolID, err)
+					continue
+				}
+
+				// 获取奖池信息
+				var pool model.PrizePool
+				if err := model.DB.First(&pool, participant.PoolID).Error; err != nil {
+					log.Printf("获取奖池 %d 信息失败: %v", participant.PoolID, err)
+					continue
+				}
+
+				// 准备参与者数据
+				var participantsData []map[string]interface{}
+				for _, p := range participants {
+					// 获取青蛙的状态
+					var participantFrog model.Frog
+					if err := model.DB.First(&participantFrog, p.FrogID).Error; err != nil {
+						continue
+					}
+
+					participantsData = append(participantsData, map[string]interface{}{
+						"walletAddress":  p.WalletAddress,
+						"serialNumber":   p.SerialNumber,
+						"canSeeBigPrize": p.WalletAddress == pool.CurrentBigPrizeHolder,
+						"isActive":       participantFrog.IsActive,
+					})
+				}
+
+				// 发布奖池参与者变化事件
+				event.Publish(event.PoolEvent{
+					Type:         event.PoolParticipantsChanged,
+					PoolID:       participant.PoolID,
+					Participants: participantsData,
+				})
+			}
 		}
 	}
 }

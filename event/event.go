@@ -8,12 +8,15 @@ type PoolEventType string
 const (
 	// PoolBecameActive 奖池变为活跃状态
 	PoolBecameActive PoolEventType = "pool_became_active"
+	// PoolParticipantsChanged 奖池参与者发生变化
+	PoolParticipantsChanged PoolEventType = "pool_participants_changed"
 )
 
 // PoolEvent 奖池事件
 type PoolEvent struct {
-	Type   PoolEventType
-	PoolID uint
+	Type         PoolEventType
+	PoolID       uint
+	Participants []map[string]interface{} // 参与者数据，仅在PoolParticipantsChanged事件中使用
 }
 
 // PoolEventHandler 奖池事件处理函数类型

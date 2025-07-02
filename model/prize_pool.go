@@ -72,6 +72,30 @@ func (pool *PrizePool) AddParticipant(frogID uint, walletAddress string) error {
 		return err
 	}
 
+	// 获取所有参与者信息用于广播
+	participants, err := GetParticipantsByPoolID(pool.ID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// 准备参与者数据
+	var participantsData []map[string]interface{}
+	for _, p := range participants {
+		// 获取青蛙的状态
+		var frog Frog
+		if err := DB.First(&frog, p.FrogID).Error; err != nil {
+			continue
+		}
+
+		participantsData = append(participantsData, map[string]interface{}{
+			"walletAddress":  p.WalletAddress,
+			"serialNumber":   p.SerialNumber,
+			"canSeeBigPrize": p.WalletAddress == pool.CurrentBigPrizeHolder,
+			"isActive":       frog.IsActive,
+		})
+	}
+
 	if pool.CurrentPlayers == 10 {
 		pool.Status = PoolStatusActive
 		if err := tx.Save(pool).Error; err != nil {
@@ -85,7 +109,18 @@ func (pool *PrizePool) AddParticipant(frogID uint, walletAddress string) error {
 		})
 	}
 
-	return tx.Commit().Error
+	if err := tx.Commit().Error; err != nil {
+		return err
+	}
+
+	// 发布奖池参与者变化事件
+	event.Publish(event.PoolEvent{
+		Type:         event.PoolParticipantsChanged,
+		PoolID:       pool.ID,
+		Participants: participantsData,
+	})
+
+	return nil
 }
 
 // CompletePool 完成奖池
